@@ -11,9 +11,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: android
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,24 +22,33 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses || true
+      # ubuntu-latest already ships Android SDK at $ANDROID_HOME.
+      # Do NOT add a setup-android step (deprecated, Node16) — it is the #1 failure cause.
+      - name: Show SDK + accept licenses
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_HOME" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Install platform + build tools
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.7
+      - name: Grant execute permission for gradlew
+        working-directory: android
+        run: chmod +x gradlew
+
+      - name: Gradle version (diagnostics)
+        working-directory: android
+        run: ./gradlew --version
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace --info
 
       - name: Verify APK exists
+        working-directory: android
         run: |
           ls -lh app/build/outputs/apk/debug/
           test -f app/build/outputs/apk/debug/app-debug.apk && echo "APK verified"
